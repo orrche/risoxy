@@ -29,6 +29,23 @@ type Manager struct {
 	Nodes []StartPoint
 }
 
+func GetStartPointForm(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "<form method='post'/>")
+	fmt.Fprintf(w, "Key: <input name='key' type='password'/><br/>")
+	fmt.Fprintf(w, "Domain: <input name='domain'/><br/>")
+	fmt.Fprintf(w, "EndPoint: <input name='endpoint'/><br/>")
+	fmt.Fprintf(w, "<input type='submit'/>")
+	fmt.Fprintf(w, "</form>")
+
+}
+
+func StartPointFData(w http.ResponseWriter, r *http.Request) *StartPoint {
+	mgmtPoint := StartPoint{r.FormValue("key"), r.FormValue("domain"), make([]EndPoint, 0, 10)}
+	mgmtPoint.EndPoint = append(mgmtPoint.EndPoint, EndPoint{r.FormValue("endpoint"), &mgmtPoint})
+
+	return &mgmtPoint
+}
+
 func startNginx() {
 	cmd := exec.Command("nginx", "-g", "daemon off;")
 	stdout, err := cmd.StdoutPipe()
@@ -153,31 +170,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func (manager *Manager) addHandler(w http.ResponseWriter, r *http.Request) {
 	writeMenu(w, r)
 	if r.Method != "POST" {
-		fmt.Fprintf(w, "<form method='post'/>")
-		fmt.Fprintf(w, "Key: <input name='key' type='password'/><br/>")
-		fmt.Fprintf(w, "Domain: <input name='domain'/><br/>")
-		fmt.Fprintf(w, "EndPoint: <input name='endpoint'/><br/>")
-		fmt.Fprintf(w, "<input type='submit'/>")
-		fmt.Fprintf(w, "</form>")
+		GetStartPointForm(w, r)
 	} else {
 		fmt.Fprintf(w, "You managed to post something... %s", r.FormValue("domain"))
-		mgmtPoint := StartPoint{r.FormValue("key"), r.FormValue("domain"), make([]EndPoint, 0, 10)}
-		mgmtPoint.EndPoint = append(mgmtPoint.EndPoint, EndPoint{r.FormValue("endpoint"), &mgmtPoint})
+		mgmtPoint := StartPointFData(w, r)
 
-		manager.AddNode(&mgmtPoint)
+		manager.AddNode(mgmtPoint)
 	}
 }
 
 func (manager *Manager) updateHandler(w http.ResponseWriter, r *http.Request) {
 	writeMenu(w, r)
 	if r.Method == "POST" {
+		mgmtPoint := StartPointFData(w, r)
+		manager.UpdateNode(mgmtPoint)
 	} else {
-		fmt.Fprintf(w, "<form method='post'/>")
-		fmt.Fprintf(w, "Key: <input name='key' type='password'/><br/>")
-		fmt.Fprintf(w, "Domain: <input name='domain'/><br/>")
-		fmt.Fprintf(w, "Endpoint: <input name='endpoint'/><br/>")
-		fmt.Fprintf(w, "<input type='submit'/>")
-		fmt.Fprintf(w, "</form>")
+		GetStartPointForm(w, r)
 	}
 }
 
@@ -199,6 +207,9 @@ func (manager *Manager) UpdateNode(newNode *StartPoint) {
 	for _, node := range manager.Nodes {
 		if node.Domain == newNode.Domain {
 			node.EndPoint[0] = newNode.EndPoint[0]
+			writeStartPoint(node)
+			reloadNginx()
+			return
 		}
 	}
 }
@@ -218,13 +229,21 @@ func (manager *Manager) listNodeHandler(w http.ResponseWriter, r *http.Request) 
 func (manager *Manager) activeNodeHandler(w http.ResponseWriter, r *http.Request) {
 	writeMenu(w, r)
 	if r.Method == "POST" {
+		mgmtPoint := StartPointFData(w, r)
+		for _, node := range manager.Nodes {
+			if node.Domain == mgmtPoint.Domain && node.EndPoint[0].Destination == mgmtPoint.EndPoint[0].Destination {
+				fmt.Fprintf(w, "OK")
+				return
+			} else if node.Domain == mgmtPoint.Domain {
+				fmt.Fprintf(w, "Domain ok...")
+				fmt.Fprintf(w, "%s = %s", node.EndPoint[0].Destination, mgmtPoint.EndPoint[0].Destination)
+				return
+			}
+		}
+		fmt.Fprintf(w, "Inactive")
+		return
 	} else {
-		fmt.Fprintf(w, "<form method='post'/>")
-		fmt.Fprintf(w, "Key: <input name='key' type='password'/><br/>")
-		fmt.Fprintf(w, "Domain: <input name='domain'/><br/>")
-		fmt.Fprintf(w, "Endpoint: <input name='endpoint'/><br/>")
-		fmt.Fprintf(w, "<input type='submit'/>")
-		fmt.Fprintf(w, "</form>")
+		GetStartPointForm(w, r)
 	}
 }
 
