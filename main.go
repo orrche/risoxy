@@ -15,18 +15,18 @@ import (
 
 type EndPoint struct {
 	Destination string
-	Start       *StartPoint
+	Start       *Node
 }
 
-type StartPoint struct {
+type Node struct {
 	Key    string
-	Domain string
+	NodeId string
 
 	EndPoint []EndPoint
 }
 
 type Manager struct {
-	Nodes []StartPoint
+	Nodes []Node
 }
 
 func GetStartPointForm(w http.ResponseWriter, r *http.Request) {
@@ -39,8 +39,8 @@ func GetStartPointForm(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func StartPointFData(w http.ResponseWriter, r *http.Request) *StartPoint {
-	mgmtPoint := StartPoint{r.FormValue("key"), r.FormValue("domain"), make([]EndPoint, 0, 10)}
+func StartPointFData(w http.ResponseWriter, r *http.Request) *Node {
+	mgmtPoint := Node{r.FormValue("key"), r.FormValue("domain"), make([]EndPoint, 0, 10)}
 	mgmtPoint.EndPoint = append(mgmtPoint.EndPoint, EndPoint{r.FormValue("endpoint"), &mgmtPoint})
 
 	return &mgmtPoint
@@ -105,8 +105,8 @@ func reloadNginx() {
 	log.Print("Nginx reloaded")
 }
 
-func writeStartPoint(startPoint StartPoint) {
-	file, err := os.Create("/etc/nginx/conf.d/" + startPoint.Domain + ".conf")
+func writeStartPoint(startPoint Node) {
+	file, err := os.Create("/etc/nginx/conf.d/" + startPoint.NodeId + ".conf")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func writeStartPoint(startPoint StartPoint) {
 
 	fmt.Fprintf(file, "server {\n")
 	fmt.Fprintf(file, "\tlisten 80;\n")
-	fmt.Fprintf(file, "\tserver_name %s;\n", startPoint.Domain)
+	fmt.Fprintf(file, "\tserver_name %s;\n", startPoint.NodeId)
 	fmt.Fprintf(file, "\tlocation /{\n")
 	for _, end := range startPoint.EndPoint {
 		fmt.Fprintf(file, "\t\tproxy_pass %s;\n", end.Destination)
@@ -189,7 +189,7 @@ func (manager *Manager) updateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (manager *Manager) addNode(node *StartPoint, reload bool) {
+func (manager *Manager) addNode(node *Node, reload bool) {
 	manager.Nodes = append(manager.Nodes, *node)
 
 	writeStartPoint(*node)
@@ -198,14 +198,14 @@ func (manager *Manager) addNode(node *StartPoint, reload bool) {
 	}
 }
 
-func (manager *Manager) AddNode(node *StartPoint) {
+func (manager *Manager) AddNode(node *Node) {
 	manager.addNode(node, true)
 
 }
 
-func (manager *Manager) UpdateNode(newNode *StartPoint) {
+func (manager *Manager) UpdateNode(newNode *Node) {
 	for _, node := range manager.Nodes {
-		if node.Domain == newNode.Domain {
+		if node.NodeId == newNode.NodeId {
 			node.EndPoint[0] = newNode.EndPoint[0]
 			writeStartPoint(node)
 			reloadNginx()
@@ -219,7 +219,7 @@ func (manager *Manager) listNodeHandler(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "text/html")
 
 	for _, node := range manager.Nodes {
-		fmt.Fprintf(w, "%s <a href='http://%s'>[w]</a><br/>\n", node.Domain, node.Domain)
+		fmt.Fprintf(w, "%s <a href='http://%s'>[w]</a><br/>\n", node.NodeId, node.NodeId)
 		for _, endpoint := range node.EndPoint {
 			fmt.Fprintf(w, " %s<br/>\n", endpoint.Destination)
 		}
@@ -231,10 +231,10 @@ func (manager *Manager) activeNodeHandler(w http.ResponseWriter, r *http.Request
 	if r.Method == "POST" {
 		mgmtPoint := StartPointFData(w, r)
 		for _, node := range manager.Nodes {
-			if node.Domain == mgmtPoint.Domain && node.EndPoint[0].Destination == mgmtPoint.EndPoint[0].Destination {
+			if node.NodeId == mgmtPoint.NodeId && node.EndPoint[0].Destination == mgmtPoint.EndPoint[0].Destination {
 				fmt.Fprintf(w, "OK")
 				return
-			} else if node.Domain == mgmtPoint.Domain {
+			} else if node.NodeId == mgmtPoint.NodeId {
 				fmt.Fprintf(w, "Domain ok...")
 				fmt.Fprintf(w, "%s = %s", node.EndPoint[0].Destination, mgmtPoint.EndPoint[0].Destination)
 				return
