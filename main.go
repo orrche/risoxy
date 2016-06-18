@@ -264,6 +264,8 @@ func (manager *Manager) UpdateNode(newNode *Node) {
 		if node.NodeId == newNode.NodeId {
 			node.EndPoints[0] = newNode.EndPoints[0]
 			writeStartPoint(node)
+
+			updateConfiguration(manager)
 			reloadNginx()
 			return
 		}
