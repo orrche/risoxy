@@ -1,0 +1,13 @@
+{{define "content"}}
+<ul style="list-style-type:none">
+	{{ range $li, $entry := .EntryPoints }}
+	<li>{{ .Domain }} {{ .Path }}
+	   <ul style="list-style-type:none">
+		   	{{ range $ei, $end := .Node.EndPoints }}
+				<li>{{ .Destination }}</li>
+			{{ end }}
+           </ul>
+	</li>
+	{{ end }}
+</ul>
+{{end}}

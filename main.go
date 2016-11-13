@@ -1,5 +1,8 @@
 package main
 
+//go:generate go-bindata-assetfs static/... template
+// # // go:generate go-bindata template
+
 import (
 	"bufio"
 	"encoding/base64"
@@ -12,7 +15,32 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+
+	"github.com/arschles/go-bindata-html-template"
 )
+
+var cookiestore *sessions.CookieStore
+var store = sessions.NewCookieStore([]byte("something very secret this time"))
+
+type Config struct {
+	AuthURL      string
+	CookieSecret string
+}
+
+var config Config
+
+type Action interface {
+	Act(w http.ResponseWriter, r *http.Request, token string) bool
+}
+
+type actionHolder struct {
+	action Action
+	token  string
+}
+
+var actions [50]actionHolder
 
 type EndPoint struct {
 	Destination string
@@ -37,12 +65,19 @@ type Manager struct {
 }
 
 func GetStartPointForm(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "<form method='post'/>")
-	fmt.Fprintf(w, "Key: <input name='key' type='password'/><br/>")
-	fmt.Fprintf(w, "Domain: <input name='domain'/><br/>")
-	fmt.Fprintf(w, "EndPoint: <input name='endpoint'/><br/>")
-	fmt.Fprintf(w, "<input type='submit'/>")
-	fmt.Fprintf(w, "</form>")
+	token := getStoredToken(w, r)
+
+	data := struct {
+		Title      string
+		AuthURL    string
+		Authorized bool
+	}{
+		Title:      "Add Entrypoint",
+		AuthURL:    config.AuthURL,
+		Authorized: tokenHoldesGroup(token, "risoxy_read"),
+	}
+	lightTemplate := readTemplateFile("template/addendpoint.html")
+	lightTemplate.Execute(w, data)
 }
 
 func StartPointFData(w http.ResponseWriter, r *http.Request) *Node {
@@ -53,18 +88,21 @@ func StartPointFData(w http.ResponseWriter, r *http.Request) *Node {
 }
 
 func GetEntryPointForm(w http.ResponseWriter, r *http.Request, manager *Manager) {
-	fmt.Fprintf(w, "<form method='post'/>")
-	fmt.Fprintf(w, "Domain: <input name='domain'/><br/>")
-	fmt.Fprintf(w, "Path: <input name='path' value='/'><br/>")
-	fmt.Fprintf(w, "Node: <select name='node'>")
-
-	for _, node := range manager.Nodes {
-		fmt.Fprintf(w, "<option value='%s'>%s</option>", node.NodeId, node.NodeId)
+	token := getStoredToken(w, r)
+	data := struct {
+		Title      string
+		AuthURL    string
+		Authorized bool
+		Nodes      []Node
+	}{
+		Title:      "Add Endpoint",
+		AuthURL:    config.AuthURL,
+		Authorized: tokenHoldesGroup(token, "risoxy_read"),
+		Nodes:      manager.Nodes,
 	}
 
-	fmt.Fprintf(w, "</select>")
-	fmt.Fprintf(w, "<input type='submit'/>")
-	fmt.Fprintf(w, "</form>")
+	template := readTemplateFile("template/addEntryPoint.html")
+	template.Execute(w, data)
 }
 
 func EntryPointFData(w http.ResponseWriter, r *http.Request, manager *Manager) *EntryPoint {
@@ -186,24 +224,21 @@ bmY7CgogICAgfQp9Cgo=
 
 }
 
-func writeMenu(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprint(w, "<a href='/add'>Add</a>\n")
-	fmt.Fprint(w, "<a href='/entrypoint/add'>Add Entrypoint</a>\n")
-	fmt.Fprint(w, "<a href='/listnodes'>List</a>\n")
-	fmt.Fprint(w, "<a href='/valid'>Validate</a>\n")
-	fmt.Fprint(w, "<a href='/update'>Update</a>\n")
-	fmt.Fprint(w, "<br/>\n\n")
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	writeMenu(w, r)
-}
-
 func (manager *Manager) addHandler(w http.ResponseWriter, r *http.Request) {
-	writeMenu(w, r)
 	if r.Method != "POST" {
-		GetStartPointForm(w, r)
+		token := getStoredToken(w, r)
+
+		data := struct {
+			Title      string
+			AuthURL    string
+			Authorized bool
+		}{
+			Title:      "Add Entrypoint",
+			AuthURL:    config.AuthURL,
+			Authorized: tokenHoldesGroup(token, "risoxy_read"),
+		}
+		lightTemplate := readTemplateFile("template/addendpoint.html")
+		lightTemplate.Execute(w, data)
 	} else {
 		fmt.Fprintf(w, "You managed to post something... %s", r.FormValue("domain"))
 		mgmtPoint := StartPointFData(w, r)
@@ -213,12 +248,11 @@ func (manager *Manager) addHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (manager *Manager) updateHandler(w http.ResponseWriter, r *http.Request) {
-	writeMenu(w, r)
-	if r.Method == "POST" {
+	if r.Method != "POST" {
+		GetStartPointForm(w, r)
+	} else {
 		mgmtPoint := StartPointFData(w, r)
 		manager.UpdateNode(mgmtPoint)
-	} else {
-		GetStartPointForm(w, r)
 	}
 }
 
@@ -238,6 +272,10 @@ func updateConfiguration(manager *Manager) {
 		fmt.Fprintf(file, "\tlocation %s {\n", entryPoint.Path)
 
 		fmt.Fprintf(file, "\t\tproxy_pass %s;\n", entryPoint.Node.EndPoints[0].Destination)
+		fmt.Fprintf(file, "\t\tproxy_redirect default;")
+		fmt.Fprintf(file, "\t\tproxy_set_header Host $host;")
+		fmt.Fprintf(file, "\t\tproxy_set_header X-Real-IP $remote_addr;")
+		fmt.Fprintf(file, "\t\tproxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
 
 		fmt.Fprintf(file, "\t}\n")
 		fmt.Fprintf(file, "}\n")
@@ -272,20 +310,7 @@ func (manager *Manager) UpdateNode(newNode *Node) {
 	}
 }
 
-func (manager *Manager) listNodeHandler(w http.ResponseWriter, r *http.Request) {
-	writeMenu(w, r)
-	w.Header().Set("Content-Type", "text/html")
-
-	for _, node := range manager.Nodes {
-		fmt.Fprintf(w, "%s <a href='http://%s'>[w]</a><br/>\n", node.NodeId, node.NodeId)
-		for _, endpoint := range node.EndPoints {
-			fmt.Fprintf(w, " %s<br/>\n", endpoint.Destination)
-		}
-	}
-}
-
 func (manager *Manager) activeNodeHandler(w http.ResponseWriter, r *http.Request) {
-	writeMenu(w, r)
 	if r.Method == "POST" {
 		mgmtPoint := StartPointFData(w, r)
 		for _, node := range manager.Nodes {
@@ -306,7 +331,6 @@ func (manager *Manager) activeNodeHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (manager *Manager) addEntryPointHandler(w http.ResponseWriter, r *http.Request) {
-	writeMenu(w, r)
 	if r.Method == "POST" {
 		entryPoint := EntryPointFData(w, r, manager)
 		manager.EntryPoints = append(manager.EntryPoints, *entryPoint)
@@ -428,19 +452,126 @@ func LoadManager(filename string) Manager {
 	return manager
 }
 
+func readTemplateFile(filename string) *template.Template {
+	return template.Must(template.New("base", Asset).ParseFiles("template/base.html", filename))
+}
+
+func failOnErr(err error, w http.ResponseWriter, r *http.Request) {
+	if err != nil {
+		http.Error(w, "Sorry", 500)
+		log.Panic(err)
+	}
+}
+
+func getStoredToken(w http.ResponseWriter, r *http.Request) string {
+	session, err := cookiestore.Get(r, "risoxy")
+	if err != nil || session.Values["token"] == nil {
+		return ""
+	}
+	var token string
+	token = session.Values["token"].(string)
+
+	return token
+}
+
+func tokenHoldesGroup(token string, grp string) bool {
+	url := fmt.Sprintf("%s/getgroupsfromtoken?token=%s", config.AuthURL, token)
+
+	resp, err := http.Post(url, "nil", nil)
+
+	if err != nil {
+		log.Panic("Token error", err)
+	}
+
+	defer resp.Body.Close()
+
+	type Info struct {
+		Groups []string
+	}
+
+	var info Info
+	_, err = toml.DecodeReader(resp.Body, &info)
+	if err != nil {
+		log.Panic("Token error", err)
+	}
+
+	for _, group := range info.Groups {
+		if group == "admin" || group == grp {
+			return true
+		}
+	}
+	return false
+}
+
+func (manager *Manager) index(w http.ResponseWriter, r *http.Request) {
+	lightTemplate := readTemplateFile("template/risoxyindex.html")
+
+	token := getStoredToken(w, r)
+
+	data := struct {
+		Title       string
+		AuthURL     string
+		Authorized  bool
+		EntryPoints []EntryPoint
+	}{
+		Title:       "Lights",
+		AuthURL:     config.AuthURL,
+		Authorized:  tokenHoldesGroup(token, "risoxy_read"),
+		EntryPoints: []EntryPoint{},
+	}
+	if tokenHoldesGroup(token, "risoxy_read") {
+		data.EntryPoints = manager.EntryPoints
+	}
+	err := lightTemplate.Execute(w, data)
+	failOnErr(err, w, r)
+
+}
+
+func auth(w http.ResponseWriter, r *http.Request) {
+	session, err := cookiestore.Get(r, "risoxy")
+	if err != nil {
+		session, err = cookiestore.New(r, "risoxy")
+	}
+	session.Values["token"] = r.FormValue("token")
+	session.Save(r, w)
+
+	if r.FormValue("atoken") != "" {
+		for i, action := range actions {
+			if action.action != nil && action.token == r.FormValue("atoken") {
+				action.action.Act(w, r, r.FormValue("token"))
+				actions[i].action = nil
+				return
+			}
+		}
+	}
+
+	http.Redirect(w, r, "/", 302)
+}
+
 func main() {
+	toml.DecodeFile("config.toml", &config)
 	writeDefaultConfig()
 	manager := LoadManager("/etc/loadmanager/state/risoxy.state")
 
 	updateConfiguration(&manager)
 
+	cookiestore = sessions.NewCookieStore([]byte(config.CookieSecret))
+
 	go startNginx()
 
-	http.HandleFunc("/", handler)
-	http.HandleFunc("/add", manager.addHandler)
-	http.HandleFunc("/update", manager.updateHandler)
-	http.HandleFunc("/entrypoint/add", manager.addEntryPointHandler)
-	http.HandleFunc("/listnodes", manager.listNodeHandler)
-	http.HandleFunc("/valid", manager.activeNodeHandler)
+	r := mux.NewRouter()
+
+	StaticFS(r)
+
+	http.Handle("/", r)
+
+	r.HandleFunc("/", manager.index)
+	r.HandleFunc("/auth", auth)
+
+	r.HandleFunc("/add", manager.addHandler)
+	r.HandleFunc("/update", manager.updateHandler)
+	r.HandleFunc("/entrypoint/add", manager.addEntryPointHandler)
+	r.HandleFunc("/valid", manager.activeNodeHandler)
+
 	http.ListenAndServe(":8080", nil)
 }

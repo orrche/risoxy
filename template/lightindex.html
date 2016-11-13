@@ -1,0 +1,11 @@
+{{define "content"}}
+<ul style="list-style-type:none">
+{{range $li, $light := .Lights}}
+	<li sytle="float:left;clear:both;"><div style="float:left;width:100px;">{{ .Name }}</div>
+		{{range $ci, $command := .Commands}}
+			<a href="/cmd/{{ $light.Id }}/{{ $ci }}" class="button">{{ .Name }}</a>
+		{{end}}
+	</li>
+{{end}}
+</ul>
+{{end}}

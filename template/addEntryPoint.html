@@ -1,0 +1,14 @@
+{{define "content"}}
+	<form method='post'/>
+		Domain: <input name='domain'/><br/>
+		Path: <input name='path' value='/'><br/>
+		Node: <select name='node'>
+
+		{{ range $ei, $end := .Nodes }}
+			<option value='{{ .NodeId }}'>{{ .NodeId }}</option>
+		{{ end }}
+
+		</select><br/>
+		<input type='submit'/>
+	</form>
+{{end}}

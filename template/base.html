@@ -1,0 +1,74 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Minoris Risoxy - {{.Title}}</title>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="description" content="" />
+
+		<!-- CSS -->
+		<link rel="stylesheet" type="text/css" href="/static/kickstart/css/kickstart.css" media="all" />
+		<link rel="stylesheet" type="text/css" href="/static/kickstart/style.css" media="all" /> 
+
+		<!-- Javascript -->
+		<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+		<script type="text/javascript" src="/static/kickstart/js/kickstart.js"></script>
+
+		<style>
+.subnavbar {
+	background-color: #000;
+	width: 100%;
+	margin-top: 50px;
+	left: 0px;
+	color: #fff;
+}
+.subnavbar ul {
+	margin-bottom: 2px;
+}
+.subnavbar li:before {
+	content: "• ";
+}
+.subnavbar li {
+	display: inline-block;
+	padding-right: 0.7em;
+}
+.subnavbar li a {
+	text-decoration: none;
+	color: #fff;
+}
+		</style>
+
+	</head>
+	<body>
+		<nav class="navbar">
+			<a id="logo" href="/">
+				<i class="icon-angle-right">Risoxy</i>
+			</a>
+			<ul>
+				<li><a href='/'>Nodes</a></li>
+				{{ if .Authorized }}
+					<li><a href='/add'>Add Endpoint</a><li>
+					<li><a href='/entrypoint/add'>Add Entrypoint</a></li>
+					<li><a href='/valid'>Validate</a></li>
+					<li><a href='/update'>Update</a></li>
+				{{ end }}
+				{{ if not .Authorized }}
+					<li><a href='{{.AuthURL}}/gettoken?returl=http://manage.kent.wr25.org/auth'>Signin</a></li>
+				{{ end }}
+			</ul>
+							
+		</nav>
+		<div class="callout-top clearfix"></div>
+		<div class="grid">
+			<article id="content">
+				{{template "content" .}}
+			</article>
+		</div>
+
+		<footer style="float:right">
+			&copy; Copyright 2016 by Kent Gustavsson.
+		</footer>
+	</body>
+</html>
+{{end}}
