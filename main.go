@@ -475,6 +475,9 @@ func getStoredToken(w http.ResponseWriter, r *http.Request) string {
 }
 
 func tokenHoldesGroup(token string, grp string) bool {
+	defer func() {
+		recover()
+	}()
 	url := fmt.Sprintf("%s/getgroupsfromtoken?token=%s", config.AuthURL, token)
 
 	resp, err := http.Post(url, "nil", nil)
