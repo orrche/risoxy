@@ -54,7 +54,7 @@
 					<li><a href='/update'>Update</a></li>
 				{{ end }}
 				{{ if not .Authorized }}
-					<li><a href='{{.AuthURL}}/gettoken?returl=http://manage.kent.wr25.org/auth'>Signin</a></li>
+				<li><a href='{{.AuthURL}}/gettoken?returl={{.BaseURL}}/auth'>Signin</a></li>
 				{{ end }}
 			</ul>
 							

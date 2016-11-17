@@ -25,6 +25,7 @@ var cookiestore *sessions.CookieStore
 var store = sessions.NewCookieStore([]byte("something very secret this time"))
 
 type Config struct {
+	BaseURL      string
 	AuthURL      string
 	CookieSecret string
 }
@@ -70,10 +71,12 @@ func GetStartPointForm(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Title      string
 		AuthURL    string
+		BaseURL    string
 		Authorized bool
 	}{
 		Title:      "Add Entrypoint",
 		AuthURL:    config.AuthURL,
+		BaseURL:    config.BaseURL,
 		Authorized: tokenHoldesGroup(token, "risoxy_read"),
 	}
 	lightTemplate := readTemplateFile("template/addendpoint.html")
@@ -92,11 +95,13 @@ func GetEntryPointForm(w http.ResponseWriter, r *http.Request, manager *Manager)
 	data := struct {
 		Title      string
 		AuthURL    string
+		BaseURL    string
 		Authorized bool
 		Nodes      []Node
 	}{
 		Title:      "Add Endpoint",
 		AuthURL:    config.AuthURL,
+		BaseURL:    config.BaseURL,
 		Authorized: tokenHoldesGroup(token, "risoxy_read"),
 		Nodes:      manager.Nodes,
 	}
@@ -231,10 +236,12 @@ func (manager *Manager) addHandler(w http.ResponseWriter, r *http.Request) {
 		data := struct {
 			Title      string
 			AuthURL    string
+			BaseURL    string
 			Authorized bool
 		}{
 			Title:      "Add Entrypoint",
 			AuthURL:    config.AuthURL,
+			BaseURL:    config.BaseURL,
 			Authorized: tokenHoldesGroup(token, "risoxy_read"),
 		}
 		lightTemplate := readTemplateFile("template/addendpoint.html")
@@ -514,11 +521,13 @@ func (manager *Manager) index(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Title       string
 		AuthURL     string
+		BaseURL     string
 		Authorized  bool
 		EntryPoints []EntryPoint
 	}{
 		Title:       "Lights",
 		AuthURL:     config.AuthURL,
+		BaseURL:     config.BaseURL,
 		Authorized:  tokenHoldesGroup(token, "risoxy_read"),
 		EntryPoints: []EntryPoint{},
 	}
